@@ -508,6 +508,15 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    const openai = new OpenAI({
+      baseURL: "https://openrouter.ai/api/v1",
+      apiKey: apiKey,
+      defaultHeaders: {
+        "HTTP-Referer": "http://localhost:3000",
+        "X-Title": "AI Trip Planner",
+      },
+    });
+
     const completion = await openai.chat.completions.create({
       model: "openai/gpt-4o-mini",
       response_format: { type: "json_object" },
