@@ -1,10 +1,10 @@
 "use client";
 
 import React, { useEffect, useState } from 'react'
+import dynamic from 'next/dynamic'
 import ChatBox from './_components/ChatBox'
 import Itinerary from './_components/Itinerary'
 import { useTripDetail } from '../provider'
-import GlobalMap from './_components/GlobalMap';
 import { Globe2, Plane } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -13,16 +13,32 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 
+const GlobalMap = dynamic(() => import('./_components/GlobalMap'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex items-center justify-center bg-slate-50 text-slate-400 text-sm animate-pulse" style={{ width: '95%', height: '85vh', borderRadius: 20 }}>
+      Loading map…
+    </div>
+  ),
+})
+
 const CreateNewTrip = () => {
-  const { tripDetailInfo, setTripDetailInfo } = useTripDetail()
-  const [activeIndex, setActiveIndex] = useState(1)
-  const [mounted, setMounted] = useState(false)
+  const { tripDetailInfo, setTripDetailInfo, targetPlace } = useTripDetail();
+  const [activeIndex, setActiveIndex] = useState(1);
+  const [mounted, setMounted] = useState(false);
 
   // Only run this client-side
   useEffect(() => {
-    setTripDetailInfo(null)
-    setMounted(true)
-  }, [])
+    setTripDetailInfo(null);
+    setMounted(true);
+  }, []);
+
+  // When a card triggers fly to map, switch to Map view
+  useEffect(() => {
+    if (targetPlace) {
+      setActiveIndex(1);
+    }
+  }, [targetPlace]);
 
   if (!mounted) return null; // 👈 prevents hydration mismatch
 

@@ -12,7 +12,7 @@ export const CreateNewUser = mutation({
     // Check if user already exists
     const existingUser = await ctx.db
       .query("UserTable")
-      .filter((q) => q.eq(q.field("email"), args.email))
+      .withIndex("by_email", (q) => q.eq("email", args.email))
       .first();
 
     if (existingUser) {

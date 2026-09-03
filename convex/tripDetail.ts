@@ -21,7 +21,11 @@ export const GetUserTrips = query({
         uid: v.id('UserTable')
     },
     handler: async(ctx, args) => {
-        const result = await ctx.db.query('TripDetailTable').filter(q => q.eq(q.field('uid'), args.uid)).order('desc').collect();
+        const result = await ctx.db
+            .query('TripDetailTable')
+            .withIndex('by_uid', (q) => q.eq('uid', args.uid))
+            .order('desc')
+            .collect();
 
         return result;
     }
@@ -33,11 +37,11 @@ export const GetTripById = query({
         tripid: v.string()
     },
     handler: async(ctx, args) => {
-        const result = await ctx.db.query('TripDetailTable').filter(q => q.and(
-            q.eq(q.field('uid'), args.uid), 
-            q.eq(q.field('tripId'), args.tripid)
-        )).collect();
+        const result = await ctx.db
+            .query('TripDetailTable')
+            .withIndex('by_uid_and_tripId', (q) => q.eq('uid', args.uid).eq('tripId', args.tripid))
+            .first();
 
-        return result[0];
+        return result;
     }
 })

@@ -203,14 +203,17 @@ export const Card = ({
       </AnimatePresence>
 
       <button
+        type="button"
         onClick={() => setOpen(true)}
-        className="relative h-80 w-56 md:h-[40rem] md:w-96 rounded-3xl overflow-hidden"
+        className="relative isolate h-80 w-56 md:h-[40rem] md:w-96 rounded-3xl overflow-hidden shrink-0"
       >
         <BlurImage
           src={card.src}
           alt={card.title}
           fill
+          sizes="(max-width: 768px) 224px, 384px"
           className="object-cover"
+          unoptimized={true}
         />
       </button>
     </>

@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import axios from 'axios';
 import { Loader, Send } from 'lucide-react'
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import EmptyBoxState from './EmptyBoxState';
 import GroupSizeUi from './GroupSizeUi';
 import BudgetUi from './BudgetUi';
@@ -41,7 +41,8 @@ export type Hotel = {
     latitude: number,
     longitude: number
   },
-  rating: number
+  rating: number,
+  description?: string
 }
 
 export type Activity = {
@@ -77,7 +78,6 @@ const ChatBox = () => {
   const [userInput, setUserInput] = useState<string>('')
   const [loading, setLoading] = useState(false)
 
-  // This state will hold the value from the Generative UI components
   const [uiSelectedValue, setUiSelectedValue] = useState<string | null>(null);
 
   const [isFinal, setIsFinal] = useState(false)
@@ -85,40 +85,43 @@ const ChatBox = () => {
 
   const SaveTripDetail = useMutation(api.tripDetail.CreateTripDetail)
 
-  const { userDetail, setUserDetail } = useUserDetail()
-  const { tripDetailInfo, setTripDetailInfo} = useTripDetail()
+  const { userDetail } = useUserDetail()
+  const { setTripDetailInfo } = useTripDetail()
   const [tripId, setTripId] = useState<string | null>(null);
 
   const router = useRouter();
-  // Use a useEffect hook to handle sending the selected UI option
-  useEffect(() => {
-    if (uiSelectedValue) {
-      onSend(uiSelectedValue);
-      setUiSelectedValue(null); // Reset the state after sending
-    }
-  }, [uiSelectedValue]);
 
+  const messagesRef = useRef(messages);
+  const isFinalRef = useRef(isFinal);
+  const userInputRef = useRef(userInput);
+  const finalSentRef = useRef(false);
 
-  const onSend = async (messageContent = userInput) => {
-    if (!messageContent?.trim() && messages.length > 0) return;
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
+  useEffect(() => { isFinalRef.current = isFinal; }, [isFinal]);
+  useEffect(() => { userInputRef.current = userInput; }, [userInput]);
+
+  const onSend = useCallback(async (messageContent = userInputRef.current, forceFinal = false) => {
+    if (!messageContent?.trim() && messagesRef.current.length > 0) return;
+    if (loading) return;
     
     setLoading(true);
     setUserInput('');
     
-    // Create a new user message
     const newMsg: Message = {
       role: 'user',
       content: messageContent
     };
-    
-    // Add the new message to the state
-    setMessages(prev => [...prev, newMsg]);
+
+    const currentMessages = [...messagesRef.current, newMsg];
+    setMessages(currentMessages);
+    messagesRef.current = currentMessages;
+
+    const runFinal = forceFinal || isFinalRef.current;
 
     try {
-      // Send the entire conversation history to the API
       const result = await axios.post('/api/aimodel', {
-        messages: [...messages, newMsg],
-        isFinal: isFinal
+        messages: currentMessages,
+        isFinal: runFinal
       });
 
       if (result?.data?.error) {
@@ -132,17 +135,18 @@ const ChatBox = () => {
         return;
       }
 
-      // Update messages with the assistant's response
-      !isFinal && setMessages(prev => [
-        ...prev,
-        {
-          role: 'assistant',
-          content: result?.data?.resp,
-          ui: result?.data?.ui
-        }
-      ]);
+      if (!runFinal) {
+        setMessages(prev => [
+          ...prev,
+          {
+            role: 'assistant',
+            content: result?.data?.resp,
+            ui: result?.data?.ui
+          }
+        ]);
+      }
 
-      if (isFinal) {
+      if (runFinal) {
         if (!result?.data?.trip_plan) {
           setMessages(prev => [
             ...prev,
@@ -159,30 +163,38 @@ const ChatBox = () => {
         const newTripId = uuidv4();
         setTripId(newTripId);
         
-        await SaveTripDetail({
-          tripDetail: result?.data?.trip_plan,
-          tripId: newTripId,
-          uid: userDetail?._id
-        })
+        if (userDetail?._id) {
+          await SaveTripDetail({
+            tripDetail: result?.data?.trip_plan,
+            tripId: newTripId,
+            uid: userDetail._id
+          })
+        }
       }
-      console.log(result.data);
     } catch (error) {
       console.error('API call failed:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [loading, SaveTripDetail, setTripDetailInfo, userDetail]);
 
-  const handleManualInputSend = () => {
-    if (userInput.trim() !== '') {
-        onSend();
+  const handleManualInputSend = useCallback(() => {
+    if (userInputRef.current.trim() !== '') {
+      onSend(userInputRef.current);
     }
-  };
+  }, [onSend]);
 
-  const handleUiSelection = (value: string) => {
+  const handleUiSelection = useCallback((value: string) => {
     setUiSelectedValue(value);
-  };
-  
+  }, []);
+
+  useEffect(() => {
+    if (!uiSelectedValue) return;
+    const val = uiSelectedValue;
+    setUiSelectedValue(null);
+    onSend(val);
+  }, [uiSelectedValue, onSend]);
+
   const RenderGenerativeUI = (ui: string) => {
     if (ui === 'budget') {
       return <BudgetUi onSelectedOption={handleUiSelection} />;
@@ -198,19 +210,13 @@ const ChatBox = () => {
 
   useEffect(() => {
     const lastMsg = messages[messages.length - 1];
-
-    if (lastMsg ?.ui === 'final') {
+    if (lastMsg?.ui === 'final' && !finalSentRef.current) {
+      finalSentRef.current = true;
       setIsFinal(true);
-      setUserInput('Ok, Great!')
-      // onSend()
+      isFinalRef.current = true;
+      setTimeout(() => onSend('Ok, Great!', true), 50);
     }
-  }, [messages]) 
-
-  useEffect(() => {
-    if (isFinal && userInput) {
-      onSend()
-    }
-  }, [isFinal])
+  }, [messages, onSend])
 
   return (
     <div className="h-[85vh] md:h-[85vh] w-full md:w-auto flex flex-col border shadow rounded-2xl p-4 sm:p-5">

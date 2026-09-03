@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useContext, useEffect, useState } from 'react'
+import React, { useContext, useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import Header from './_components/Header';
 import { useMutation } from 'convex/react';
 import { api } from '@/convex/_generated/api';
@@ -15,42 +15,55 @@ function Provider ({
   children: React.ReactNode;
 }>){
 
-  const CreateUser = useMutation(api.user.CreateNewUser)
-  const [userDetail, setUserDetail] = useState<any>()
-  const [tripDetailInfo, setTripDetailInfo] = useState<TripInfo|null>(null)
+  const createUserMutation = useMutation(api.user.CreateNewUser);
+  const [userDetail, setUserDetail] = useState<any>();
+  const [tripDetailInfo, setTripDetailInfo] = useState<TripInfo | null>(null);
+  const [targetPlace, setTargetPlace] = useState<any>(null);
 
-  const { user } = useUser()
+  const { user } = useUser();
+  const createdRef = useRef<string | null>(null);
+
+  const handleCreateUser = useCallback(async () => {
+    const email = user?.primaryEmailAddress?.emailAddress;
+    if (!email || createdRef.current === email) return;
+    createdRef.current = email;
+
+    try {
+      const result = await createUserMutation({
+        email: email ?? "",
+        imageUrl: user?.imageUrl ?? "",
+        name: user?.fullName ?? "",
+      });
+      setUserDetail(result);
+    } catch (e) {
+      console.error("Create user failed", e);
+    }
+  }, [user, createUserMutation]);
 
   useEffect(() => {
-    user && CreateNewUser();
-  }, [user])
-
-  const CreateNewUser = async () => {
-    // Save New User
-
-    if (user) {
-      const result = await CreateUser({
-        email: user?.primaryEmailAddress?.emailAddress ?? '',
-        imageUrl: user?.imageUrl ?? '',
-        name: user?.fullName ?? ''
-      })
-
-      setUserDetail(result)
+    if (user?.primaryEmailAddress?.emailAddress) {
+      handleCreateUser();
     }
-    
-    
-  }
+  }, [user?.primaryEmailAddress?.emailAddress, handleCreateUser]);
+
+  const userDetailValue = useMemo(
+    () => ({ userDetail, setUserDetail }),
+    [userDetail],
+  );
+
+  const tripDetailValue = useMemo<TripContextType>(
+    () => ({ tripDetailInfo, setTripDetailInfo, targetPlace, setTargetPlace }),
+    [tripDetailInfo, targetPlace],
+  );
 
   return (
-    <UserDetailContext.Provider value={{ userDetail, setUserDetail }}>
-      <TripDetailContext.Provider value={{ tripDetailInfo, setTripDetailInfo }}>
-        <div>
-          <Header />
-          {children}
-        </div>
+    <UserDetailContext.Provider value={userDetailValue}>
+      <TripDetailContext.Provider value={tripDetailValue}>
+        <Header />
+        {children}
       </TripDetailContext.Provider>
     </UserDetailContext.Provider>
-  )
+  );
 }
 
 export default Provider 
